@@ -1,9 +1,15 @@
 local iterIntSlider = 1
-local code = "A"
-local ui = require "imgui"
-local inspect = require "inspect"
-print(inspect(ui))
+local axiom = [[
+AB
+]]
+local rules = [[
+A -> B
+B -> AB
+]]
 local gr = love.graphics
+local canvas = gr.newCanvas()
+local inspect = require "inspect"
+local ui = require "imgui"
 local vec2 = require "vector"
 
 local function width()
@@ -30,7 +36,7 @@ end
 function Turtle:move()
     print("self:move")
     self.x, self.y = self.x + self.dir.x, self.y + self.dir.y
-    return "AA"
+    return "A"
 end
 
 function Turtle:rotateRight()
@@ -51,50 +57,73 @@ function Turtle:update(dt)
     end
 end
 
-function Turtle:execCoro(code, iterCount)
+function parseRules(rules)
+    for s in string.gmatch(rules, "[^\n]+") do
+        local from, to = string.match(s, "(%a+)%s*->%s*(%a+)")
+        rulesTable[from] = to
+    end
+end
+
+function rewrite(axiom, rulesTable, iterCount)
+    local str = axiom
+    local substrs = {}
+    for i = 1, iterCount do
+        for char in str:gmatch(".") do
+            if char ~= "\n" then
+                table.insert(substrs, rulesTable[char])
+            end
+        end
+        str = table.concat(substrs)
+    end
+    return str
+end
+
+function Turtle:execCoro(axiom, rules, iterCount)
     local cmd = {
         ["A"] = self.move,
+        ["B"] = self.move,
         ["+"] = self.rotateRight,
-        ["-"] = self.rotateLeft
+        ["-"] = self.rotateLeft,
     }
 
-    print("code", code)
-    assert(type(code) == "string")
-
+    local rulesTable = parseRules(rules)
+    print("rulesTable", inspect(rulesTable))
     print("iterCount", iterCount)
+    local str = rewrite(axiom, rulesTable, iterCount)
+    print("str", str)
 
-    while true do
-        local newcode = {}
+    --while true do
+        --local newcode = {}
 
-        for i = 1, code:len() do
-            local char = string.sub(code, i, i)
-            print("char", char)
-            local rule = cmd[char]
-            if rule then
-                local new = rule(self)
-                --print("new", new)
-                if new then
-                    assert(type(new) == "string")
-                    table.insert(newcode, new)
-                end
-            end
-            coroutine.yield()
-        end
+        --for i = 1, code:len() do
+            --local char = string.sub(code, i, i)
+            --print("char", char)
+            --local rule = cmd[char]
+            --if rule then
+                --local new = rule(self)
+                ----print("new", new)
+                --if new then
+                    --assert(type(new) == "string")
+                    --table.insert(newcode, new)
+                --end
+            --end
+            --coroutine.yield()
+        --end
 
-        code = table.concat(newcode)
-        print("code", code)
+        --code = table.concat(newcode)
+        --print("code", code)
 
-        if iterCount < 1 then
-            break
-        end
+        --if iterCount < 1 then
+            --break
+        --end
 
-        iterCount = iterCount - 1
-    end
+        --iterCount = iterCount - 1
+    --end
 end
 
 function Turtle:execute(code, iterations)
     self.executor = coroutine.create(self.execCoro)
-    coroutine.resume(self.executor, self, code, iterations)
+    coroutine.resume(self.executor, self, axiom, rules, iterations)
 end
 
 function love.textinput(t)
@@ -112,7 +141,7 @@ end
 love.keypressed = function(_, k)
     ui.KeyPressed(k)
     if not ui.GetWantCaptureKeyboard() then
-        if k == "1" then
+        if k == "space" then
             resetAndRun()
         end
     end
@@ -151,6 +180,11 @@ function love.wheelmoved(x, y)
         -- Pass event to the game
     end
 end
+
+love.quit = function()
+    ui.ShutDown()
+end
+
 love.load = function()
     turtle = Turtle:new(width() / 2, height() / 2, 0)
 end
@@ -166,8 +200,37 @@ function drawTurtle()
     gr.points(turtle.x, turtle.y)
 end
 
+function drawDocks()
+    imgui.SetNextWindowPos(0, 0)
+    imgui.SetNextWindowSize(love.graphics.getWidth(), love.graphics.getHeight())
+    if imgui.Begin("DockArea", nil, { "ImGuiWindowFlags_NoTitleBar", "ImGuiWindowFlags_NoResize", "ImGuiWindowFlags_NoMove", "ImGuiWindowFlags_NoBringToFrontOnFocus" }) then
+        imgui.BeginDockspace()
+
+        -- Create 10 docks
+        for i = 1, 10 do
+            if imgui.BeginDock("dock_"..i) then
+                imgui.Text("Hello, dock "..i.."!");
+            end
+            imgui.EndDock()
+        end
+
+        imgui.EndDockspace()
+    end
+    imgui.End()
+
+    love.graphics.clear(0.2, 0.2, 0.2)
+    imgui.Render();
+end
+
 love.draw = function()
+    gr.setCanvas(canvas)
+    gr.setColor{1, 1, 1, 1}
+    gr.clear{0, 0, 0, 0}
     drawTurtle()
+    gr.setCanvas()
+    gr.setColor{1, 1, 1, 1}
+
+    gr.draw(canvas)
 
     ui.Begin("setup", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
     iterIntSlider = ui.SliderInt("iterations", iterIntSlider, 1, 10)
@@ -176,10 +239,15 @@ love.draw = function()
     end
     ui.End()
 
-    ui.Begin("L-system code", false, { "ImGuiWindowFlags_AlwaysAutoResize" })
-    code = ui.InputTextMultiline("InputText", code, 200, 300, 200);
-       
+    ui.Begin("Axiom", false, { "ImGuiWindowFlags_AlwaysAutoResize" })
+    axiom = ui.InputTextMultiline("InputText", axiom, 200, 300, 200);
     ui.End()
+
+    ui.Begin("L-system rules", false, { "ImGuiWindowFlags_AlwaysAutoResize" })
+    rules = ui.InputTextMultiline("InputText", rules, 200, 300, 200);
+    ui.End()
+
+    --drawDocks()
     
     ui.Render()
 end
