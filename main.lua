@@ -1,9 +1,9 @@
-local iterIntSlider = 1
+local iterIntSlider = 5
 local axiom = [[
 AB
 ]]
 local rules = [[
-A -> B
+A -> -B+
 B -> AB
 ]]
 local gr = love.graphics
@@ -34,17 +34,18 @@ function Turtle:new(x, y, angle)
 end
 
 function Turtle:move()
-    print("self:move")
+    print("move")
     self.x, self.y = self.x + self.dir.x, self.y + self.dir.y
-    return "A"
 end
 
 function Turtle:rotateRight()
-    self.dir:rotateInplace(math.pi * 3 / 4)
+    print("rotateRight")
+    self.dir:rotateInplace(math.pi)
 end
 
 function Turtle:rotateLeft()
-    self.dir:rotateInplace(-math.pi * 3 / 4)
+    print("rotateLeft")
+    self.dir:rotateInplace(-math.pi)
 end
 
 function Turtle:update(dt)
@@ -58,10 +59,12 @@ function Turtle:update(dt)
 end
 
 function parseRules(rules)
+    local rulesTable = {}
     for s in string.gmatch(rules, "[^\n]+") do
-        local from, to = string.match(s, "(%a+)%s*->%s*(%a+)")
+        local from, to = string.match(s, "([^%s]+)%s*->%s*([^%s]+)")
         rulesTable[from] = to
     end
+    return rulesTable
 end
 
 function rewrite(axiom, rulesTable, iterCount)
@@ -69,9 +72,9 @@ function rewrite(axiom, rulesTable, iterCount)
     local substrs = {}
     for i = 1, iterCount do
         for char in str:gmatch(".") do
-            if char ~= "\n" then
-                table.insert(substrs, rulesTable[char])
-            end
+            table.insert(substrs, rulesTable[char])
+            print("char", char)
+            print("rule", rulesTable[char])
         end
         str = table.concat(substrs)
     end
@@ -85,40 +88,27 @@ function Turtle:execCoro(axiom, rules, iterCount)
         ["+"] = self.rotateRight,
         ["-"] = self.rotateLeft,
     }
+    local str
 
-    local rulesTable = parseRules(rules)
-    print("rulesTable", inspect(rulesTable))
-    print("iterCount", iterCount)
-    local str = rewrite(axiom, rulesTable, iterCount)
-    print("str", str)
+    local ok, msg = pcall(function()
+        print("execCoro")
+        local rulesTable = parseRules(rules)
+        print("rulesTable", inspect(rulesTable))
+        print("iterCount", iterCount)
+        print("axiom", axiom)
+        str = rewrite(axiom, rulesTable, iterCount)
+        print("str", str)
+    end)
 
-    --while true do
-        --local newcode = {}
+    for char in str:gmatch(".") do
+        local command = cmd[char]
+        if command then 
+            command(self) 
+        end
+        coroutine.yield()
+    end
 
-        --for i = 1, code:len() do
-            --local char = string.sub(code, i, i)
-            --print("char", char)
-            --local rule = cmd[char]
-            --if rule then
-                --local new = rule(self)
-                ----print("new", new)
-                --if new then
-                    --assert(type(new) == "string")
-                    --table.insert(newcode, new)
-                --end
-            --end
-            --coroutine.yield()
-        --end
-
-        --code = table.concat(newcode)
-        --print("code", code)
-
-        --if iterCount < 1 then
-            --break
-        --end
-
-        --iterCount = iterCount - 1
-    --end
+    print(ok, msg)
 end
 
 function Turtle:execute(code, iterations)
@@ -133,9 +123,16 @@ function love.textinput(t)
     end
 end
 
+function clearCanvas()
+    gr.setCanvas(canvas)
+    gr.clear{0, 0, 0, 0}
+    gr.setCanvas()
+end
+
 function resetAndRun()
     turtle = Turtle:new(width() / 2, height() / 2, - 1 / 2 * math.pi)
     turtle:execute(code, iterIntSlider)
+    clearCanvas()
 end
 
 love.keypressed = function(_, k)
@@ -225,7 +222,7 @@ end
 love.draw = function()
     gr.setCanvas(canvas)
     gr.setColor{1, 1, 1, 1}
-    gr.clear{0, 0, 0, 0}
+    --gr.clear{0, 0, 0, 0}
     drawTurtle()
     gr.setCanvas()
     gr.setColor{1, 1, 1, 1}
