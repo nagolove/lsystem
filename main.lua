@@ -1,10 +1,15 @@
+local referenceGuide = [[A: draw and move
+B: draw and move
+-: rotare left
++: rotate right
+Examples of rules:
+]]
 local iterIntSlider = 5
 local axiom = [[
-AB
+A++A++A
 ]]
 local rules = [[
-A -> -B+
-B -> AB
+A -> A-A++A-A
 ]]
 local gr = love.graphics
 local canvas = gr.newCanvas()
@@ -99,6 +104,8 @@ function Turtle:execCoro(axiom, rules, iterCount)
         str = rewrite(axiom, rulesTable, iterCount)
         print("str", str)
     end)
+
+    resultString = str
 
     for char in str:gmatch(".") do
         local command = cmd[char]
@@ -219,6 +226,42 @@ function drawDocks()
     imgui.Render();
 end
 
+function setupWindow()
+    ui.Begin("setup", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
+    iterIntSlider = ui.SliderInt("iterations", iterIntSlider, 1, 10)
+    if ui.Button("run&reset") then
+        resetAndRun()
+    end
+    ui.End()
+end
+
+function axiomWindow()
+    ui.Begin("Axiom", false, { "ImGuiWindowFlags_AlwaysAutoResize" })
+    axiom = ui.InputTextMultiline("InputText", axiom, 200, 300, 200);
+    ui.End()
+end
+
+function rulesWindow()
+    ui.Begin("L-system rules", false, { "ImGuiWindowFlags_AlwaysAutoResize" })
+    rules = ui.InputTextMultiline("InputText", rules, 200, 300, 200);
+    ui.End()
+end
+
+function resultStringWindow()
+    ui.Begin("Result string", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
+    if resultString then
+        _ = ui.InputTextMultiline("InputText", resultString, 200, 300, 100, { "ImGuiInputTextFlags_ReadOnly" });
+    end
+    ui.End()
+end
+
+
+function helpWindow()
+    ui.Begin("Reference guide", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
+    _ = ui.InputTextMultiline("InputText", referenceGuide, 200, 300, 100, { "ImGuiInputTextFlags_ReadOnly" });
+    ui.End()
+end
+
 love.draw = function()
     gr.setCanvas(canvas)
     gr.setColor{1, 1, 1, 1}
@@ -229,22 +272,12 @@ love.draw = function()
 
     gr.draw(canvas)
 
-    ui.Begin("setup", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
-    iterIntSlider = ui.SliderInt("iterations", iterIntSlider, 1, 10)
-    if ui.Button("run&reset") then
-        resetAndRun()
-    end
-    ui.End()
-
-    ui.Begin("Axiom", false, { "ImGuiWindowFlags_AlwaysAutoResize" })
-    axiom = ui.InputTextMultiline("InputText", axiom, 200, 300, 200);
-    ui.End()
-
-    ui.Begin("L-system rules", false, { "ImGuiWindowFlags_AlwaysAutoResize" })
-    rules = ui.InputTextMultiline("InputText", rules, 200, 300, 200);
-    ui.End()
-
     --drawDocks()
+    setupWindow()
+    rulesWindow()
+    axiomWindow()
+    helpWindow()
+    resultStringWindow()
     
     ui.Render()
 end
