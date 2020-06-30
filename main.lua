@@ -39,17 +39,17 @@ function Turtle:new(x, y, angle)
 end
 
 function Turtle:move()
-    print("move")
+    --print("move")
     self.x, self.y = self.x + self.dir.x, self.y + self.dir.y
 end
 
 function Turtle:rotateRight()
-    print("rotateRight")
+    --print("rotateRight")
     self.dir:rotateInplace(math.pi)
 end
 
 function Turtle:rotateLeft()
-    print("rotateLeft")
+    --print("rotateLeft")
     self.dir:rotateInplace(-math.pi)
 end
 
@@ -73,20 +73,32 @@ function parseRules(rules)
 end
 
 function rewrite(axiom, rulesTable, iterCount)
+    --[[
+    -- для начальной строки(аксиомы) слева на право применяются правила
+    -- правило применяется так:
+    --  для всех букв проходит цикл по строке
+    --  для текущей буквы ищется правило замены
+    --  если правило есть, то добавляется результат к буферу результата
+    --]]
+    print("rulesTable", inspect(rulesTable))
     local str = axiom
     local substrs = {}
     for i = 1, iterCount do
         for char in str:gmatch(".") do
-            table.insert(substrs, rulesTable[char])
-            print("char", char)
-            print("rule", rulesTable[char])
+            local newSeq = rulesTable[char]
+            if newSeq then
+                table.insert(substrs, rulesTable[char])
+                print("char", char)
+                print("rule", rulesTable[char])
+            end
         end
         str = table.concat(substrs)
     end
+    print("str", str)
     return str
 end
 
-function Turtle:execCoro(axiom, rules, iterCount)
+function Turtle:body(axiom, rules, iterCount)
     local cmd = {
         ["A"] = self.move,
         ["B"] = self.move,
@@ -102,7 +114,7 @@ function Turtle:execCoro(axiom, rules, iterCount)
         print("iterCount", iterCount)
         print("axiom", axiom)
         str = rewrite(axiom, rulesTable, iterCount)
-        print("str", str)
+        --print("str", str)
     end)
 
     resultString = str
@@ -118,8 +130,8 @@ function Turtle:execCoro(axiom, rules, iterCount)
     print(ok, msg)
 end
 
-function Turtle:execute(code, iterations)
-    self.executor = coroutine.create(self.execCoro)
+function Turtle:start(code, iterations)
+    self.executor = coroutine.create(self.body)
     coroutine.resume(self.executor, self, axiom, rules, iterations)
 end
 
@@ -138,7 +150,7 @@ end
 
 function resetAndRun()
     turtle = Turtle:new(width() / 2, height() / 2, - 1 / 2 * math.pi)
-    turtle:execute(code, iterIntSlider)
+    turtle:start(code, iterIntSlider)
     clearCanvas()
 end
 
@@ -186,11 +198,23 @@ function love.wheelmoved(x, y)
 end
 
 love.quit = function()
+    local succ, msg
+    succ, msg = love.filesystem.write("rules.txt", rules)
+    succ, msg = love.filesystem.write("axiom.txt", axiom)
     ui.ShutDown()
 end
 
 love.load = function()
     turtle = Turtle:new(width() / 2, height() / 2, 0)
+    local content, size
+    content, size = love.filesystem.read("rules.txt")
+    if content then
+        rules = content
+    end
+    content, size = love.filesystem.read("axiom.txt")
+    if content then
+        axiom = content
+    end
 end
 
 love.update = function(dt)
@@ -202,28 +226,6 @@ function drawTurtle()
     gr.setColor{0, 1, 0}
     gr.setPointSize(8)
     gr.points(turtle.x, turtle.y)
-end
-
-function drawDocks()
-    imgui.SetNextWindowPos(0, 0)
-    imgui.SetNextWindowSize(love.graphics.getWidth(), love.graphics.getHeight())
-    if imgui.Begin("DockArea", nil, { "ImGuiWindowFlags_NoTitleBar", "ImGuiWindowFlags_NoResize", "ImGuiWindowFlags_NoMove", "ImGuiWindowFlags_NoBringToFrontOnFocus" }) then
-        imgui.BeginDockspace()
-
-        -- Create 10 docks
-        for i = 1, 10 do
-            if imgui.BeginDock("dock_"..i) then
-                imgui.Text("Hello, dock "..i.."!");
-            end
-            imgui.EndDock()
-        end
-
-        imgui.EndDockspace()
-    end
-    imgui.End()
-
-    love.graphics.clear(0.2, 0.2, 0.2)
-    imgui.Render();
 end
 
 function setupWindow()
@@ -250,11 +252,20 @@ end
 function resultStringWindow()
     ui.Begin("Result string", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
     if resultString then
-        _ = ui.InputTextMultiline("InputText", resultString, 200, 300, 100, { "ImGuiInputTextFlags_ReadOnly" });
+        local maxLen = 100
+        if #resultString > maxLen then
+            local subResult = resultString:sub(1, maxLen)
+            local t = {}
+            local maxWidth = 4
+            for i = 0, math.floor(#subResult / maxWidth) do
+                table.insert(t, subResult:sub(i * maxWidth, i * maxWidth + maxWidth) .. "\n")
+            end
+            subResult = table.concat(t)
+            _ = ui.InputTextMultiline("InputText", subResult, 200, 300, 100, { "ImGuiInputTextFlags_ReadOnly" });
+        end
     end
     ui.End()
 end
-
 
 function helpWindow()
     ui.Begin("Reference guide", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
@@ -272,7 +283,6 @@ love.draw = function()
 
     gr.draw(canvas)
 
-    --drawDocks()
     setupWindow()
     rulesWindow()
     axiomWindow()
