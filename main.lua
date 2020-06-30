@@ -1,21 +1,26 @@
 local referenceGuide = [[A: draw and move
 B: draw and move
--: rotare left
+-: rotate left
 +: rotate right
 Examples of rules:
 ]]
+
 local iterIntSlider = 5
+
 local axiom = [[
 A++A++A
 ]]
+
 local rules = [[
 A -> A-A++A-A
 ]]
+
 local gr = love.graphics
 local canvas = gr.newCanvas()
 local inspect = require "inspect"
 local ui = require "imgui"
 local vec2 = require "vector"
+local resultString
 
 local function width()
     return gr.getWidth()
@@ -33,6 +38,7 @@ function Turtle:new(x, y, angle)
     s.x = x
     s.y = y
     s.dir = vec2.fromPolar(angle) * 3
+    s:setColor1()
     print("dir length", s.dir:len())
     --print("self.dir", inspect(s.dir))
     return s
@@ -45,12 +51,20 @@ end
 
 function Turtle:rotateRight()
     --print("rotateRight")
-    self.dir:rotateInplace(math.pi)
+    self.dir:rotateInplace(math.pi / 3)
 end
 
 function Turtle:rotateLeft()
     --print("rotateLeft")
-    self.dir:rotateInplace(-math.pi)
+    self.dir:rotateInplace(-math.pi / 3)
+end
+
+function Turtle:setColor1()
+    self.color = {0, 1, 0, 1}
+end
+
+function Turtle:setColor2()
+    self.color = {1, 0, 0, 1}
 end
 
 function Turtle:update(dt)
@@ -104,8 +118,9 @@ function Turtle:body(axiom, rules, iterCount)
         ["B"] = self.move,
         ["+"] = self.rotateRight,
         ["-"] = self.rotateLeft,
+        ["C"] = self.setColor1,
+        ["D"] = self.setColor2,
     }
-    local str
 
     local ok, msg = pcall(function()
         print("execCoro")
@@ -113,16 +128,16 @@ function Turtle:body(axiom, rules, iterCount)
         print("rulesTable", inspect(rulesTable))
         print("iterCount", iterCount)
         print("axiom", axiom)
-        str = rewrite(axiom, rulesTable, iterCount)
+        resultString = rewrite(axiom, rulesTable, iterCount)
         --print("str", str)
     end)
 
-    resultString = str
-
-    for char in str:gmatch(".") do
+    for char in resultString:gmatch(".") do
         local command = cmd[char]
         if command then 
             command(self) 
+        else
+            print("no such command", char)
         end
         coroutine.yield()
     end
@@ -223,14 +238,14 @@ love.update = function(dt)
 end
 
 function drawTurtle()
-    gr.setColor{0, 1, 0}
+    gr.setColor(turtle.color)
     gr.setPointSize(8)
     gr.points(turtle.x, turtle.y)
 end
 
 function setupWindow()
     ui.Begin("setup", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
-    iterIntSlider = ui.SliderInt("iterations", iterIntSlider, 1, 10)
+    iterIntSlider = ui.SliderInt("iterations", iterIntSlider, 1, 100)
     if ui.Button("run&reset") then
         resetAndRun()
     end
@@ -250,17 +265,23 @@ function rulesWindow()
 end
 
 function resultStringWindow()
-    ui.Begin("Result string", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
+    --ui.Begin("Result string", true, { "ImGuiWindowFlags_AlwaysAutoResize" })
+    ui.Begin("Result string", true)
     if resultString then
-        local maxLen = 100
+        local maxLen = 1000
         if #resultString > maxLen then
             local subResult = resultString:sub(1, maxLen)
-            local t = {}
-            local maxWidth = 4
-            for i = 0, math.floor(#subResult / maxWidth) do
-                table.insert(t, subResult:sub(i * maxWidth, i * maxWidth + maxWidth) .. "\n")
-            end
-            subResult = table.concat(t)
+
+            --[[
+               [local t = {}
+               [local maxWidth = 40
+               [for i = 0, math.floor(#subResult / maxWidth) do
+               [    table.insert(t, subResult:sub(i * maxWidth, i * maxWidth + maxWidth) .. "\n")
+               [end
+               [subResult = table.concat(t)
+               ]]
+
+            --_ = ui.InputTextMultiline("InputText", subResult, 200, 300, 100, { "ImGuiInputTextFlags_ReadOnly" });
             _ = ui.InputTextMultiline("InputText", subResult, 200, 300, 100, { "ImGuiInputTextFlags_ReadOnly" });
         end
     end
@@ -287,7 +308,7 @@ love.draw = function()
     rulesWindow()
     axiomWindow()
     helpWindow()
-    resultStringWindow()
+    --resultStringWindow()
     
     ui.Render()
 end
